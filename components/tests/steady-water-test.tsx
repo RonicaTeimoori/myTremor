@@ -41,6 +41,7 @@ export function SteadyWaterTest({ onComplete }: SteadyWaterTestProps) {
   const [timeRemaining, setTimeRemaining] = useState(TEST_DURATION)
   const [waterLevel, setWaterLevel] = useState(100)
   const [paused, setPaused] = useState(false)
+  const [holding, setHolding] = useState(false) // mirrors holdingRef so React effects can react
   const [showHelp, setShowHelp] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -231,6 +232,7 @@ export function SteadyWaterTest({ onComplete }: SteadyWaterTestProps) {
         const dy = ptr.y - cupRef.current.y
         if (Math.sqrt(dx * dx + dy * dy) < PICKUP_RADIUS) {
           holdingRef.current = true
+          setHolding(true) // notify React so the pickup→testing transition can fire
         }
       }
 
@@ -325,7 +327,7 @@ export function SteadyWaterTest({ onComplete }: SteadyWaterTestProps) {
 
   // Detect pickup completion → transition to testing
   useEffect(() => {
-    if (phase === 'pickup' && holdingRef.current) {
+    if (phase === 'pickup' && holding) {
       const t = setTimeout(() => {
         setTimeRemaining(TEST_DURATION)
         waterLevelRef.current = 100
@@ -336,18 +338,7 @@ export function SteadyWaterTest({ onComplete }: SteadyWaterTestProps) {
       }, 600)
       return () => clearTimeout(t)
     }
-  }, [phase, paused])
-
-  // Watch the holdingRef in a frame loop just to keep React state in sync for the transition above
-  useEffect(() => {
-    if (phase !== 'pickup') return
-    const id = setInterval(() => {
-      if (holdingRef.current) {
-        setPaused(false) // trigger the effect above
-      }
-    }, 100)
-    return () => clearInterval(id)
-  }, [phase])
+  }, [phase, holding])
 
   // === Pointer handlers ===
   const pointerHandlers = usePointerHandlers(canvasRef, {
@@ -355,11 +346,11 @@ export function SteadyWaterTest({ onComplete }: SteadyWaterTestProps) {
       pointerRef.current = p
       // During testing, tapping the cup resumes if paused
       if (phase === 'testing' && pausedRef.current) {
-        // Check if tap is near cup
         const dx = p.x - cupRef.current.x
         const dy = p.y - cupRef.current.y
         if (Math.sqrt(dx * dx + dy * dy) < PICKUP_RADIUS) {
           holdingRef.current = true
+          setHolding(true)
           pausedRef.current = false
           setPaused(false)
         }
@@ -373,17 +364,18 @@ export function SteadyWaterTest({ onComplete }: SteadyWaterTestProps) {
       // If we were holding during testing, lifting pauses
       if (phase === 'testing' && holdingRef.current) {
         holdingRef.current = false
+        setHolding(false)
         pausedRef.current = true
         setPaused(true)
-      } else if (phase === 'pickup') {
-        // Lifted during pickup phase before grabbing — no penalty, just reset
-        holdingRef.current = false
+      } else if (phase === 'pickup' && !holdingRef.current) {
+        // Lifted during pickup phase before grabbing — no penalty, just reset pointer
       }
     },
     onPointerCancel: () => {
       pointerRef.current = null
       if (phase === 'testing' && holdingRef.current) {
         holdingRef.current = false
+        setHolding(false)
         pausedRef.current = true
         setPaused(true)
       }
@@ -394,6 +386,7 @@ export function SteadyWaterTest({ onComplete }: SteadyWaterTestProps) {
 
   const handleCountdownDone = () => {
     holdingRef.current = false
+    setHolding(false)
     grabAnimRef.current = 0
     pausedRef.current = false
     setPaused(false)
