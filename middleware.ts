@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 
-// Auth is handled client-side via localStorage, so middleware is a no-op.
+// Auth is now handled client-side via localStorage, so middleware is a no-op.
 export function middleware(_request: NextRequest) {
   return NextResponse.next()
 }

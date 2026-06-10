@@ -60,9 +60,9 @@ export default function SignUpPage() {
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <Hand className="w-8 h-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">Create an Account</CardTitle>
+          <CardTitle className="text-2xl">Create Your Account</CardTitle>
           <CardDescription className="text-base">
-            It only takes a second. No email confirmation needed.
+            Join MyTremor to track your tremor history and exercises
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -106,7 +106,7 @@ export default function SignUpPage() {
                 </Field>
               </div>
               <Field>
-                <FieldLabel htmlFor="email" className="text-base">Email</FieldLabel>
+                <FieldLabel htmlFor="email" className="text-base">Email Address</FieldLabel>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
@@ -140,7 +140,11 @@ export default function SignUpPage() {
               </Field>
             </FieldGroup>
 
-            <Button type="submit" className="w-full h-12 text-base" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full h-12 text-base"
+              disabled={loading}
+            >
               {loading ? "Creating account..." : "Create Account"}
             </Button>
 

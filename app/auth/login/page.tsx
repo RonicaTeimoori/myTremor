@@ -48,7 +48,7 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl">Welcome Back</CardTitle>
           <CardDescription className="text-base">
-            Sign in to see your test history.
+            Sign in to MyTremor to access your history and settings
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -61,7 +61,7 @@ export default function LoginPage() {
 
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="email" className="text-base">Email</FieldLabel>
+                <FieldLabel htmlFor="email" className="text-base">Email Address</FieldLabel>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
@@ -83,7 +83,7 @@ export default function LoginPage() {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Your password"
+                    placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
@@ -94,12 +94,16 @@ export default function LoginPage() {
               </Field>
             </FieldGroup>
 
-            <Button type="submit" className="w-full h-12 text-base" disabled={loading}>
+            <Button
+              type="submit"
+              className="w-full h-12 text-base"
+              disabled={loading}
+            >
               {loading ? "Signing in..." : "Sign In"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
+              {"Don't have an account? "}
               <Link href="/auth/sign-up" className="text-primary hover:underline font-medium">
                 Sign up
               </Link>

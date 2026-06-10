@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import {
-  getEffectiveUserId,
+  getCurrentUser,
   getTestsForUser,
   getSurveysForUser,
+  type LocalUser,
   type LocalTremorTest,
   type LocalDailySurvey,
 } from "@/lib/local-auth"
@@ -40,32 +41,40 @@ type TimeRange = "week" | "month" | "all"
 const testNames: Record<string, string> = {
   rest: "Rest",
   draw: "Draw",
-  "steady-water": "Steady Cup",
+  "steady-water": "Steady Water",
 }
 
 export function History() {
+  const [user, setUser] = useState<LocalUser | null>(null)
   const [loading, setLoading] = useState(true)
   const [tests, setTests] = useState<LocalTremorTest[]>([])
   const [surveys, setSurveys] = useState<LocalDailySurvey[]>([])
-  const [timeRange, setTimeRange] = useState<TimeRange>("all")
+  const [timeRange, setTimeRange] = useState<TimeRange>("week")
   const [activeTab, setActiveTab] = useState("tests")
 
   useEffect(() => {
-    const userId = getEffectiveUserId()
-    const userTests = getTestsForUser(userId).sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
-    const userSurveys = getSurveysForUser(userId).sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
-    setTests(userTests)
-    setSurveys(userSurveys)
+    const currentUser = getCurrentUser()
+    setUser(currentUser)
+
+    if (currentUser) {
+      // Newest first
+      const userTests = getTestsForUser(currentUser.id).sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+      const userSurveys = getSurveysForUser(currentUser.id).sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+      setTests(userTests)
+      setSurveys(userSurveys)
+    }
+
     setLoading(false)
   }, [])
 
-  const getFiltered = <T extends { created_at: string }>(items: T[]): T[] => {
+  const getFilteredTests = () => {
     const now = new Date()
     const cutoff = new Date()
+
     switch (timeRange) {
       case "week":
         cutoff.setDate(now.getDate() - 7)
@@ -74,24 +83,42 @@ export function History() {
         cutoff.setMonth(now.getMonth() - 1)
         break
       default:
-        return items
+        return tests
     }
-    return items.filter((t) => new Date(t.created_at) >= cutoff)
+
+    return tests.filter((t) => new Date(t.created_at) >= cutoff)
   }
 
-  const filteredTests = getFiltered(tests)
-  const filteredSurveys = getFiltered(surveys)
+  const getFilteredSurveys = () => {
+    const now = new Date()
+    const cutoff = new Date()
 
-  // Build chart data — each point gets a UNIQUE label (date + time) so Recharts
-  // can actually draw a connecting line between same-day tests.
+    switch (timeRange) {
+      case "week":
+        cutoff.setDate(now.getDate() - 7)
+        break
+      case "month":
+        cutoff.setMonth(now.getMonth() - 1)
+        break
+      default:
+        return surveys
+    }
+
+    return surveys.filter((s) => new Date(s.created_at) >= cutoff)
+  }
+
+  const filteredTests = getFilteredTests()
+  const filteredSurveys = getFilteredSurveys()
+
+  // Test chart data — include time so points on the same day don't collapse onto each other.
+  // Each entry needs a unique label, otherwise Recharts can't draw a connecting line.
   const testChartData = filteredTests
     .slice()
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
     .map((t) => {
       const d = new Date(t.created_at)
       return {
-        date:
-          d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+        date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
           " " +
           d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
         score: Number(t.score),
@@ -99,22 +126,19 @@ export function History() {
       }
     })
 
+  // Survey chart data — one survey per day usually, so date alone is fine.
   const surveyChartData = filteredSurveys
     .slice()
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-    .map((s) => {
-      const d = new Date(s.created_at)
-      return {
-        date:
-          d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
-          " " +
-          d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
-        tremor: Number(s.tremor_severity),
-        sleep: Number(s.sleep_quality),
-        stress: Number(s.stress_level),
-      }
-    })
+    .map((s) => ({
+      date: new Date(s.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      tremor: Number(s.tremor_severity),
+      sleep: Number(s.sleep_quality),
+      stress: Number(s.stress_level),
+      caffeine: Number(s.caffeine_intake),
+    }))
 
+  // Test statistics
   const avgScore =
     filteredTests.length > 0
       ? Math.round(filteredTests.reduce((sum, t) => sum + t.score, 0) / filteredTests.length)
@@ -122,6 +146,7 @@ export function History() {
 
   const recentTests = filteredTests.slice(0, 5)
   const olderTests = filteredTests.slice(5)
+
   let trend: "up" | "down" | "stable" = "stable"
   if (recentTests.length >= 2 && olderTests.length >= 2) {
     const recentAvg = recentTests.reduce((sum, t) => sum + t.score, 0) / recentTests.length
@@ -130,6 +155,7 @@ export function History() {
     else if (recentAvg < olderAvg - 5) trend = "down"
   }
 
+  // Survey statistics
   const avgSeverity =
     filteredSurveys.length > 0
       ? Math.round(
@@ -137,6 +163,7 @@ export function History() {
             10
         ) / 10
       : 0
+
   const avgSleep =
     filteredSurveys.length > 0
       ? Math.round(
@@ -145,17 +172,49 @@ export function History() {
         ) / 10
       : 0
 
+  // Test type breakdown
   const testBreakdown = Object.entries(
     filteredTests.reduce((acc, t) => {
       acc[t.test_type] = (acc[t.test_type] || 0) + 1
       return acc
     }, {} as Record<string, number>)
-  ).map(([type, count]) => ({ name: testNames[type] || type, count }))
+  ).map(([type, count]) => ({
+    name: testNames[type] || type,
+    count,
+  }))
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+        <div className="animate-pulse text-muted-foreground">Loading history...</div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-foreground">History</h1>
+          <p className="text-muted-foreground mt-2">
+            Track your tremor test results and daily surveys over time
+          </p>
+        </div>
+
+        <Card className="text-center py-16">
+          <CardContent>
+            <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
+              <BarChart3 className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <h2 className="text-xl font-semibold text-foreground">Sign In to View History</h2>
+            <p className="text-muted-foreground mt-2 mb-4">
+              Create an account or sign in to track your progress over time.
+            </p>
+            <Button asChild>
+              <a href="/auth/login">Sign In</a>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -165,8 +224,8 @@ export function History() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-foreground">History</h1>
-          <p className="text-muted-foreground mt-2 text-base">
-            All your past tests and check-ins will show up here.
+          <p className="text-muted-foreground mt-2">
+            Track your tremor test results and daily surveys over time
           </p>
         </div>
 
@@ -176,8 +235,8 @@ export function History() {
               <BarChart3 className="w-8 h-8 text-muted-foreground" />
             </div>
             <h2 className="text-xl font-semibold text-foreground">No Data Yet</h2>
-            <p className="text-muted-foreground mt-2 max-w-md mx-auto">
-              Take a tremor test or fill out a daily check-in to see your history.
+            <p className="text-muted-foreground mt-2">
+              Complete a tremor test or daily survey to start tracking your history.
             </p>
           </CardContent>
         </Card>
@@ -190,7 +249,7 @@ export function History() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground">History</h1>
-          <p className="text-muted-foreground mt-1 text-base">See how you&apos;re doing over time.</p>
+          <p className="text-muted-foreground mt-1">Track your progress over time</p>
         </div>
         <div className="flex border rounded-lg overflow-hidden">
           {(["week", "month", "all"] as TimeRange[]).map((range) => (
@@ -215,11 +274,12 @@ export function History() {
           </TabsTrigger>
           <TabsTrigger value="surveys" className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4" />
-            Check-Ins
+            Daily Surveys
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="tests" className="space-y-6 mt-6">
+          {/* Test Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-6">
@@ -274,11 +334,12 @@ export function History() {
             </Card>
           </div>
 
+          {/* Score Over Time Chart */}
           {testChartData.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Score Over Time</CardTitle>
-                <CardDescription>Higher = steadier. Take a test to add more points.</CardDescription>
+                <CardDescription>Your tremor test scores across the selected time period</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
@@ -290,8 +351,8 @@ export function History() {
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={testChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-                        <XAxis dataKey="date" stroke="#737373" fontSize={11} />
-                        <YAxis domain={[0, 100]} stroke="#737373" fontSize={11} />
+                        <XAxis dataKey="date" stroke="#737373" fontSize={12} />
+                        <YAxis domain={[0, 100]} stroke="#737373" fontSize={12} />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: "#fff",
@@ -317,18 +378,25 @@ export function History() {
             </Card>
           )}
 
+          {/* Test Type Breakdown */}
           {testBreakdown.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Tests by Type</CardTitle>
-                <CardDescription>How many of each test you&apos;ve taken.</CardDescription>
+                <CardDescription>Number of tests taken for each test type</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[200px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={testBreakdown} layout="vertical">
                       <XAxis type="number" stroke="#737373" fontSize={12} />
-                      <YAxis type="category" dataKey="name" stroke="#737373" fontSize={12} width={100} />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        stroke="#737373"
+                        fontSize={12}
+                        width={100}
+                      />
                       <Tooltip
                         contentStyle={{
                           backgroundColor: "#fff",
@@ -344,11 +412,12 @@ export function History() {
             </Card>
           )}
 
+          {/* Recent Tests List */}
           {filteredTests.length > 0 && (
             <Card>
               <CardHeader>
                 <CardTitle>Recent Tests</CardTitle>
-                <CardDescription>Your latest 10 tests.</CardDescription>
+                <CardDescription>Your latest test results</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -363,7 +432,7 @@ export function History() {
                         </div>
                         <div>
                           <p className="font-medium text-foreground">
-                            {testNames[test.test_type] || test.test_type} —{" "}
+                            {testNames[test.test_type] || test.test_type} -{" "}
                             {test.hand === "left" ? "Left" : "Right"} Hand
                           </p>
                           <p className="text-sm text-muted-foreground">
@@ -405,12 +474,13 @@ export function History() {
         </TabsContent>
 
         <TabsContent value="surveys" className="space-y-6 mt-6">
+          {/* Survey Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Avg Tremor</p>
+                    <p className="text-sm text-muted-foreground">Avg Tremor Severity</p>
                     <p className="text-3xl font-bold text-foreground">{avgSeverity}/10</p>
                   </div>
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -424,7 +494,7 @@ export function History() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Avg Sleep</p>
+                    <p className="text-sm text-muted-foreground">Avg Sleep Quality</p>
                     <p className="text-3xl font-bold text-foreground">{avgSleep}/10</p>
                   </div>
                   <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
@@ -438,7 +508,7 @@ export function History() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Check-Ins</p>
+                    <p className="text-sm text-muted-foreground">Surveys Completed</p>
                     <p className="text-3xl font-bold text-foreground">{filteredSurveys.length}</p>
                   </div>
                   <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
@@ -449,24 +519,25 @@ export function History() {
             </Card>
           </div>
 
+          {/* Survey Trends Chart */}
           {surveyChartData.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Trends Over Time</CardTitle>
-                <CardDescription>Your check-in answers, plotted out.</CardDescription>
+                <CardTitle>Health Trends Over Time</CardTitle>
+                <CardDescription>Your daily survey responses across the selected time period</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
                   {surveyChartData.length === 1 ? (
                     <div className="flex items-center justify-center h-full text-muted-foreground text-sm text-center px-6">
-                      Fill out at least 2 check-ins to see trend lines.
+                      Complete at least 2 surveys to see your trend lines.
                     </div>
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={surveyChartData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" />
-                        <XAxis dataKey="date" stroke="#737373" fontSize={11} />
-                        <YAxis domain={[0, 10]} stroke="#737373" fontSize={11} />
+                        <XAxis dataKey="date" stroke="#737373" fontSize={12} />
+                        <YAxis domain={[0, 10]} stroke="#737373" fontSize={12} />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: "#fff",
@@ -478,7 +549,7 @@ export function History() {
                         <Line
                           type="monotone"
                           dataKey="tremor"
-                          name="Tremor"
+                          name="Tremor Severity"
                           stroke="#0891b2"
                           strokeWidth={2}
                           dot={{ fill: "#0891b2", r: 4 }}
@@ -488,7 +559,7 @@ export function History() {
                         <Line
                           type="monotone"
                           dataKey="sleep"
-                          name="Sleep"
+                          name="Sleep Quality"
                           stroke="#14b8a6"
                           strokeWidth={2}
                           dot={{ fill: "#14b8a6", r: 4 }}
@@ -498,7 +569,7 @@ export function History() {
                         <Line
                           type="monotone"
                           dataKey="stress"
-                          name="Stress"
+                          name="Stress Level"
                           stroke="#f59e0b"
                           strokeWidth={2}
                           dot={{ fill: "#f59e0b", r: 4 }}
@@ -513,11 +584,12 @@ export function History() {
             </Card>
           )}
 
+          {/* Recent Surveys List */}
           {filteredSurveys.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Recent Check-Ins</CardTitle>
-                <CardDescription>Your latest 10 entries.</CardDescription>
+                <CardTitle>Recent Surveys</CardTitle>
+                <CardDescription>Your latest daily survey entries</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
@@ -529,8 +601,6 @@ export function History() {
                             weekday: "long",
                             month: "long",
                             day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
                           })}
                         </p>
                         <span
@@ -540,7 +610,7 @@ export function History() {
                               : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {survey.medication_taken ? "Took Meds" : "No Meds"}
+                          {survey.medication_taken ? "Medication Taken" : "No Medication"}
                         </span>
                       </div>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -581,9 +651,9 @@ export function History() {
                 <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-4">
                   <ClipboardList className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <h2 className="text-xl font-semibold text-foreground">No Check-Ins Yet</h2>
+                <h2 className="text-xl font-semibold text-foreground">No Surveys Yet</h2>
                 <p className="text-muted-foreground mt-2">
-                  Fill out your first daily check-in to start tracking.
+                  Complete your first daily survey to start tracking patterns.
                 </p>
               </CardContent>
             </Card>

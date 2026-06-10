@@ -1,11 +1,12 @@
-// localStorage-based auth + data store (no backend needed)
+// Simple localStorage-based auth + data store (no backend).
+// This replaces Supabase for the class project demo.
 
 export interface LocalUser {
   id: string
   email: string
   first_name: string
   last_name: string
-  password: string
+  password: string // stored plain — DEMO ONLY, not real security
   created_at: string
 }
 
@@ -35,7 +36,6 @@ const USERS_KEY = "mytremor_users"
 const CURRENT_USER_KEY = "mytremor_current_user"
 const TESTS_KEY = "mytremor_tests"
 const SURVEYS_KEY = "mytremor_surveys"
-const GUEST_ID = "guest"
 
 function isBrowser() {
   return typeof window !== "undefined"
@@ -69,13 +69,6 @@ export function getAllUsers(): LocalUser[] {
 
 export function getCurrentUser(): LocalUser | null {
   return readJSON<LocalUser | null>(CURRENT_USER_KEY, null)
-}
-
-// Returns either the logged-in user's id, or "guest". Use this so tests/surveys
-// always have somewhere to live, even without an account.
-export function getEffectiveUserId(): string {
-  const user = getCurrentUser()
-  return user ? user.id : GUEST_ID
 }
 
 export function signUp(input: {
@@ -145,6 +138,14 @@ export function saveTest(input: Omit<LocalTremorTest, "id" | "created_at">): Loc
 export function getSurveysForUser(userId: string): LocalDailySurvey[] {
   const all = readJSON<LocalDailySurvey[]>(SURVEYS_KEY, [])
   return all.filter((s) => s.user_id === userId)
+}
+
+export function getTodaysSurveyForUser(userId: string): LocalDailySurvey | null {
+  const surveys = getSurveysForUser(userId)
+  const today = new Date().toISOString().split("T")[0]
+  return (
+    surveys.find((s) => s.created_at.split("T")[0] === today) || null
+  )
 }
 
 export function saveSurvey(

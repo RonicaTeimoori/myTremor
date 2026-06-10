@@ -42,14 +42,14 @@ interface NavigationProps {
 const mainNavItems = [
   { id: "dashboard" as Section, label: "Home", icon: Home },
   { id: "tests" as Section, label: "Tests", icon: Activity },
-  { id: "survey" as Section, label: "Check-In", icon: ClipboardList },
+  { id: "survey" as Section, label: "Survey", icon: ClipboardList },
   { id: "history" as Section, label: "History", icon: BarChart3 },
   { id: "exercises" as Section, label: "Exercises", icon: Dumbbell },
-  { id: "medications" as Section, label: "Meds", icon: Pill },
+  { id: "medications" as Section, label: "Medications", icon: Pill },
 ]
 
 const moreNavItems = [
-  { id: "information" as Section, label: "Info", icon: BookOpen },
+  { id: "information" as Section, label: "Information", icon: BookOpen },
   { id: "help" as Section, label: "Help", icon: HelpCircle },
   { id: "about" as Section, label: "About", icon: Info },
 ]
@@ -62,6 +62,7 @@ export function Navigation({ activeSection, setActiveSection }: NavigationProps)
   useEffect(() => {
     setUser(getCurrentUser())
     setLoading(false)
+
     const unsub = onAuthChange((u) => setUser(u))
     return () => unsub()
   }, [])
@@ -84,7 +85,6 @@ export function Navigation({ activeSection, setActiveSection }: NavigationProps)
               <Activity className="w-5 h-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-semibold text-foreground">MyTremor</span>
-            <span className="text-xs font-bold text-white bg-green-600 px-2 py-0.5 rounded">v3</span>
           </button>
 
           {/* Desktop Navigation */}
@@ -106,6 +106,7 @@ export function Navigation({ activeSection, setActiveSection }: NavigationProps)
               )
             })}
 
+            {/* More Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -135,6 +136,7 @@ export function Navigation({ activeSection, setActiveSection }: NavigationProps)
             </DropdownMenu>
           </nav>
 
+          {/* User Menu */}
           <div className="hidden lg:flex items-center gap-2">
             {loading ? (
               <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
@@ -169,6 +171,7 @@ export function Navigation({ activeSection, setActiveSection }: NavigationProps)
             )}
           </div>
 
+          {/* Mobile Menu Button */}
           <div className="lg:hidden flex items-center gap-2">
             {!loading && !user && (
               <Button asChild variant="default" size="sm">
@@ -188,6 +191,7 @@ export function Navigation({ activeSection, setActiveSection }: NavigationProps)
           </div>
         </div>
 
+        {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <div className="lg:hidden border-t border-border py-4">
             <nav className="flex flex-col gap-1">
