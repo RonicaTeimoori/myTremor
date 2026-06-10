@@ -27,9 +27,9 @@ export default function Home() {
   const [activeSection, setActiveSection] = useState<Section>("dashboard")
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] bg-background">
       <Navigation activeSection={activeSection} setActiveSection={setActiveSection} />
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+      <main className="container mx-auto px-3 sm:px-4 py-4 md:py-8 max-w-6xl pb-24 md:pb-8">
         {activeSection === "dashboard" && <Dashboard setActiveSection={setActiveSection} />}
         {activeSection === "tests" && <TremorTests />}
         {activeSection === "history" && <History />}
