@@ -45,7 +45,7 @@ export function DrawTest({ onComplete }: DrawTestProps) {
     return () => clearInterval(interval)
   }, [phase])
 
-  // --- Scoring (unchanged math) ---
+  // --- Scoring (slightly more lenient than v4 — forgives small wobbles) ---
   const calculateShapeScore = useCallback(
     (movements: { x: number; y: number; time: number }[], shape: Shape) => {
       if (movements.length < 10) return 50
@@ -55,11 +55,13 @@ export function DrawTest({ onComplete }: DrawTestProps) {
         const a1 = Math.atan2(p2.y - p1.y, p2.x - p1.x)
         const a2 = Math.atan2(p3.y - p2.y, p3.x - p2.x)
         const d = Math.abs(a2 - a1)
-        if (d > 0.3) smoothness -= d * 2
+        // Forgive bumps up to ~23° (0.4 rad), and penalize less per radian
+        if (d > 0.4) smoothness -= d * 1.2
       }
       if (shape === 'line') {
         const first = movements[0], last = movements[movements.length - 1]
         const len = Math.sqrt(Math.pow(last.x - first.x, 2) + Math.pow(last.y - first.y, 2))
+        if (len < 50) return 30 // trace was too short to count as a real line attempt
         let total = 0
         movements.forEach((m) => {
           const dist =
@@ -72,7 +74,8 @@ export function DrawTest({ onComplete }: DrawTestProps) {
           total += dist
         })
         const avg = total / movements.length
-        smoothness = Math.max(0, 100 - avg * 2)
+        // Was avg * 2; now avg * 1.2 — about 40% more forgiving
+        smoothness = Math.max(0, 100 - avg * 1.2)
       }
       return Math.max(0, Math.min(100, Math.round(smoothness)))
     },
